@@ -2,7 +2,7 @@
 
 class TelegramException extends Exception{}
 
-class telegramBot
+class TelegramBot
 {
   const BASE_URL = 'https://api.telegram.org/bot';
 
