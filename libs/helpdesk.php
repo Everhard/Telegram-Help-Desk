@@ -35,6 +35,39 @@ class Message {
     private $sender_last_name;
 }
 
+class History {
+    public function __construct($bot) {
+        $this->DBH = DB::getInstance();
+        
+        $stmt = $this->DBH->prepare("SELECT * FROM history WHERE bot_id = :bot_id");
+        $stmt->bindParam(':bot_id', $bot->getId());
+        
+        $stmt->execute();
+        
+        $this->history = $stmt->fetchAll();
+    }
+    
+    public function writeRequest($user, $bot) {
+        
+        $stmt = $this->DBH->prepare("INSERT INTO history (client_name, client_telegram_id, bot_id) VALUES (:client_name, :client_telegram_id, :bot_id)");
+        
+        $stmt->bindParam(':client_name', $user->getFullName());
+        $stmt->bindParam(':client_telegram_id', $user->getUserTelegramId());
+        $stmt->bindParam(':bot_id', $bot->getId());
+        
+        $stmt->execute();
+        
+        $this->history[] = [
+            "client_name" => $user->getFullName(),
+            "client_telegram_id" => $user->getUserTelegramId(),
+            "bot_id" =>  $bot->getId(),
+        ];
+    }
+
+    private $DBH;
+    private $history;
+}
+
 class Bot {
     public function __construct() {
         $this->DBH = DB::getInstance();
@@ -59,6 +92,10 @@ class Bot {
     
     public function getManager() {
         return new User($this->getManagerTelegramId());
+    }
+    
+    public function getId() {
+        return $this->id;
     }
     
     public function getManagerTelegramId() {
@@ -99,6 +136,13 @@ class User {
     }
     
     public function sendMessage($message, $bot) {
+        /*
+         * Write to history:
+         */
+        
+        $history = new History($bot);
+        $history->writeRequest($this, $bot);
+        
         $bot->getTelegram()->sendMessage($this->user_telegram_id, $message);
     }
     
@@ -118,6 +162,23 @@ class User {
         return $this->user_telegram_id;
     }
     
+    public function getFullName() {
+        return $this->getFirstName()." ".$this->getLastName();
+    }
+
+    public function getCommandFormatFullName() {
+        $command_full_name = "/".$this->getFirstName()."-".$this->getLastName();
+        return str_replace(" ", "-", $command_full_name);
+    }
+
+    public function getFirstName() {
+        return $this->first_name;
+    }
+
+    public function getLastName() {
+        return $this->last_name;
+    }
+
     private function doesUserExist() {
         $stmt = $this->DBH->prepare("SELECT * FROM users WHERE user_telegram_id = :user_telegram_id");
         $stmt->bindParam(':user_telegram_id', $this->user_telegram_id);

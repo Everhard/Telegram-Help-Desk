@@ -6,7 +6,7 @@ require_once('libs/helpdesk.php');
 $message = [
     "first-name" => "Maria",
     "last-name" => "Prototopova",
-    "user-telegram-id" => "325"
+    "user-telegram-id" => "3325"
 ];
 
 if ($input = file_get_contents('php://input') || TRUE) {
@@ -40,8 +40,12 @@ if ($input = file_get_contents('php://input') || TRUE) {
      */
     if ($user->isClient($bot)) {
         
+        echo "Client";
+        
+        $message_to_manager = "/".$user->getFullName().$message;
+        
         $manager = $bot->getManager();
-        $manager->sendMessage("Hello!", $bot);
+        $manager->sendMessage($message_to_manager, $bot);
         
     }
     
