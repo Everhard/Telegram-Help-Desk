@@ -89,11 +89,11 @@ class History {
         $stmt->bindParam(':bot_id', $this->bot->getId());
         $stmt->execute();
         
-        $this->history[] = [
+        $this->history[] = array(
             "client_name" => $user->getCommandFullName(),
             "client_telegram_id" => $user->getUserTelegramId(),
             "bot_id" =>  $this->bot->getId(),
-        ];
+        );
     }
 
     private $DBH;
@@ -233,7 +233,7 @@ class User {
     }
     
     public function makeAdmin() {
-        $this->DBH->execute("UPDATE users SET is_admin = 0");
+        $this->DBH->exec("UPDATE users SET is_admin = 0");
         $stmt = $this->DBH->prepare("UPDATE users SET is_admin = 1 WHERE id = :user_id");
         $stmt->bindParam(':user_id', $this->id);
         $stmt->execute();

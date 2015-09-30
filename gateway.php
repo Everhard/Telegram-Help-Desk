@@ -12,11 +12,11 @@ if (true || $input = file_get_contents('php://input')) {
     
     $bot = new Bot();
     
-    $user = new User([
+    $user = new User(array(
         "first-name" => $message->getSenderFirstName(),
         "last-name" => $message->getSenderLastName(),
         "user-telegram-id" => $message->getSenderId(),
-    ]);
+    ));
     
     /*
      * Administrator:
