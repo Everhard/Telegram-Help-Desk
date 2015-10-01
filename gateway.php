@@ -6,7 +6,7 @@ require_once('libs/helpdesk.php');
 
 $input = '{"update_id":914635613,"message":{"message_id":25,"from":{"id":109075721,"first_name":"Andrew","last_name":"Dorokhov"},"chat":{"id":109075721,"first_name":"Andrew","last_name":"Dorokhov"},"date":1443650284,"text":"1111"}}';
 
-if (true || $input = file_get_contents('php://input')) {
+if ($input = file_get_contents('php://input')) {
     
     $message = new Message($input);
     
@@ -43,7 +43,13 @@ if (true || $input = file_get_contents('php://input')) {
                 /*
                  * Comlete started scenario:
                  */
-                switch($user->getScenario()) {
+                
+                if ($message->getText() == "/cancel") {
+                    $user->setScenarioDone();
+                    $answer = "Текущее действие было отменено!\n";
+                }
+                
+                else switch($user->getScenario()) {
                     
                     case "wait-password-to-become-admin":
                         if ($message->getText() == $config['admin-password']) {
@@ -54,7 +60,7 @@ if (true || $input = file_get_contents('php://input')) {
                         }
                         else {
                             
-                            $answer = "Простите, ".$user->getFirstName().", но Вы указали неправильный пароль!\n";
+                            $answer = "Вы указали неправильный пароль!\n";
                             $answer .= "Попробуйте ещё раз! Но в этот раз будьте внимательней!\n";
                         }
                         
