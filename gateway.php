@@ -21,7 +21,7 @@ if ($input = file_get_contents('php://input')) {
     /*
      * Administrator:
      */
-    if ($user->isAdmin()) {
+    if ($user->isAdmin() && $bot->getId() == 1) {
         echo "Admin";
     }
     
@@ -75,12 +75,13 @@ if ($input = file_get_contents('php://input')) {
                  * Scenario init:
                  */
                 
-                $answer = '';
+                $answer = 'Неверная команда! /start - просмотреть весь список команд.';
             
                 if ($message->getText() == "/start") {
 
                     $answer = "Управление ботом Help Desk Center:\n\n";
-                    $answer .= "/become_admin - получить административные права.\n";
+                    $answer .= "/become_admin - получить права администратора.\n";
+                    $answer .= "/become_manager - получить права менеджера.\n";
                     $answer .= "/cancel - отменить текущую операцию.";
 
                 }
@@ -88,6 +89,16 @@ if ($input = file_get_contents('php://input')) {
                 if ($message->getText() == "/become_admin") {
 
                     $answer = "Пожалуйста, введите пароль суперпользователя:\n";
+                    $user->setScenario("wait-password-to-become-admin");
+                }
+                
+                if ($message->getText() == "/become_manager") {
+
+                    $admin = new Administrator();
+                    $admin->sendMessage("Пользователь хочет стать менеджером!");
+                    
+                    $answer = "Спасибо! Запрос был послан администратору!\n";
+                    $answer .= "О результатах его решения Вы узнаете мгновенно.\n";
                     $user->setScenario("wait-password-to-become-admin");
                 }
             }

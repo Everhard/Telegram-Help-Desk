@@ -1,11 +1,5 @@
 <?php
 
-class Scenario {
-    public function __construct($message, $user) {
-        
-    }
-}
-
 class Message {
 
     /**
@@ -102,10 +96,15 @@ class History {
 }
 
 class Bot {
-    public function __construct() {
+    public function __construct($id = 0) {
         $this->DBH = DB::getInstance();
         
-        $this->id = (isset($_GET['id'])) ? $_GET['id'] : 1;
+        if ($id == 0) {
+            $this->id = (isset($_GET['id'])) ? $_GET['id'] : 1;
+        }
+        else {
+            $this->id = $id;
+        }
 
         $stmt = $this->DBH->prepare("SELECT * FROM bots WHERE id = :id");
         $stmt->bindParam(':id', $this->id);
@@ -239,7 +238,7 @@ class User {
         $stmt->execute();
     }
 
-    private function doesUserExist() {
+    protected function doesUserExist() {
         $stmt = $this->DBH->prepare("SELECT * FROM users WHERE user_telegram_id = :user_telegram_id");
         $stmt->bindParam(':user_telegram_id', $this->user_telegram_id);
         $stmt->execute();
@@ -258,7 +257,7 @@ class User {
         return false;
     }
     
-    private function storeNewUser() {
+    protected function storeNewUser() {
         
         $this->is_manager = 0;
         $this->is_admin = 0;
@@ -278,14 +277,35 @@ class User {
         $this->id = $this->DBH->lastInsertId();
     }
     
-    private $DBH;
-    private $id;
-    private $first_name;
-    private $last_name;
-    private $user_telegram_id;
-    private $is_manager;
-    private $is_admin;
-    private $scenario;
+    protected $DBH;
+    protected $id;
+    protected $first_name;
+    protected $last_name;
+    protected $user_telegram_id;
+    protected $is_manager;
+    protected $is_admin;
+    protected $scenario;
+}
+
+class Administrator extends User {
+    public function __construct() {
+        
+        $db = DB::getInstance();
+        $stmt = $db->query("SELECT * FROM users WHERE is_admin = 1");
+        
+        if ($admin = $stmt->fetch()) {
+            parent::__construct($admin['user_telegram_id']);
+        }
+        else {
+            throw new Exception("Admin doesn't exist!");
+        }
+        
+    }
+    
+    public function sendMessage($message) {
+        $bot = new Bot(1);
+        $bot->getTelegram()->sendMessage($this->user_telegram_id, $message);
+    }
 }
 
 class DB {
