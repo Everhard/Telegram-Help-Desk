@@ -302,6 +302,35 @@ class Administrator extends User {
         
     }
     
+    public function hasManagerRequests() {
+        $stmt = $this->DBH->query("SELECT COUNT(*) FROM manager_requests WHERE asked = 0"); 
+        return ($stmt->fetchColumn() > 0) ? true : false;
+    }
+    
+    public function storeManagerRequest($user) {
+        
+        $request_time = time();
+        
+        $stmt = $this->DBH->prepare("INSERT INTO manager_requests (user_telegram_id, request_time, asked) VALUES (:user_telegram_id, :request_time, 0)");
+        $stmt->bindParam(':user_telegram_id', $user->getUserTelegramId());
+        $stmt->bindParam(':request_time', $request_time);
+        $stmt->execute();
+    }
+    
+    public function makeManagerRequestAsk() {
+        $stmt = $this->DBH->query("SELECT COUNT(*) FROM manager_requests WHERE asked = 1");
+        if ($stmt->fetchColumn() == 0) {
+            $stmt = $this->DBH->query("SELECT * FROM manager_requests WHERE asked = 0");
+            if ($request = $stmt->fetch()) {
+                $stmt = $this->DBH->prepare("UPDATE manager_requests SET asked = 1 WHERE id = :id");
+                $stmt->bindParam(':id', $request['id']);
+                $stmt->execute();
+                
+                $this->sendMessage("Пользователь хочет стать менеджером (new code)!");
+            }
+        }
+    }
+    
     public function sendMessage($message) {
         $bot = new Bot(1);
         $bot->getTelegram()->sendMessage($this->user_telegram_id, $message);

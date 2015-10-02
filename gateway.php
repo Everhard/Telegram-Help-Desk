@@ -85,6 +85,12 @@ if ($input = file_get_contents('php://input')) {
                     $answer .= "/cancel - отменить текущую операцию.";
 
                 }
+                
+                if ($message->getText() == "/cancel") {
+
+                    $answer = "В данный момент команда /cancel неприменима.\n";
+
+                }
 
                 if ($message->getText() == "/become_admin") {
 
@@ -95,7 +101,8 @@ if ($input = file_get_contents('php://input')) {
                 if ($message->getText() == "/become_manager") {
 
                     $admin = new Administrator();
-                    $admin->sendMessage("Пользователь хочет стать менеджером!");
+                    $admin->storeManagerRequest($user);
+                    $admin->makeManagerRequestAsk();
                     
                     $answer = "Спасибо! Запрос был послан администратору!\n";
                     $answer .= "О результатах его решения Вы узнаете мгновенно.\n";
