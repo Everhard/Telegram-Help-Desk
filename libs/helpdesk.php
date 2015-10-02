@@ -76,7 +76,7 @@ class History {
             return;
         }
         
-        $stmt = $this->DBH->prepare("INSERT INTO history (client_name, client_telegram_id, bot_id) VALUES (:client_name, :client_telegram_id, :bot_id)");
+        $stmt = $this->DBH->prepare("INSERT INTO history (client_name, client_telegram_id, bot_id, in_process) VALUES (:client_name, :client_telegram_id, :bot_id, '0')");
         
         $stmt->bindParam(':client_name', $user->getCommandFullName());
         $stmt->bindParam(':client_telegram_id', $user->getUserTelegramId());
@@ -89,10 +89,78 @@ class History {
             "bot_id" =>  $this->bot->getId(),
         );
     }
+    
+    public function getHistoryByName($name) {
+        $stmt = $this->DBH->prepare("SELECT * FROM history WHERE client_name = :client_name");
+        $stmt->bindParam(':client_name', $name);
+        $stmt->execute();
+        
+        if ($history = $stmt->fetch()) {
+            return new UserHistory($history);
+        }
+        
+        return false;
+    }
+    
+    public function getHistoryByInProcess() {
+        $stmt = $this->DBH->prepare("SELECT * FROM history WHERE in_process = 1 AND bot_id = :bot_id");
+        $stmt->bindParam(':bot_id', $this->bot->getId());
+        $stmt->execute();
+        
+        if ($history = $stmt->fetch()) {
+            return new UserHistory($history);
+        }
+        
+        return false;
+    }
+
+    public function getArrayOfNames() {
+        $names = array();
+        foreach ($this->history as $history) {
+            $names[] = "/".$history['client_name'];
+        }
+        return $names;
+    }
 
     private $DBH;
     private $bot;
     private $history;
+}
+
+class UserHistory {
+    
+    public function __construct($row) {
+        $this->DBH = DB::getInstance();
+        
+        $this->id = $row['id'];
+        $this->client_name = $row['client_name'];
+        $this->client_telegram_id = $row['client_telegram_id'];
+        $this->bot_id = $row['bot_id'];
+        $this->in_process = $row['in_process'];
+    }
+
+    public function makeStatusInProcess() {
+        $stmt = $this->DBH->prepare("UPDATE history SET in_process = 1 WHERE id = :id");
+        $stmt->bindParam(':id', $this->id);
+        $stmt->execute();
+    }
+
+    public function getUser() {
+        return new User($this->client_telegram_id);
+    }
+    
+    public function delete() {
+        $stmt = $this->DBH->prepare("DELETE FROM history WHERE id = :id");
+        $stmt->bindParam(':id', $this->id);
+        $stmt->execute();
+    }
+
+    private $DBH;
+    private $id;
+    private $client_name;
+    private $client_telegram_id;
+    private $bot_id;
+    private $in_process;
 }
 
 class Bot {
@@ -170,16 +238,28 @@ class User {
         }
     }
     
-    public function sendMessage($message, $bot) {
-        $bot->getTelegram()->sendMessage($this->user_telegram_id, $message);
+    public function sendMessage($message, $bot, $keyboard = false) {
+        
+        if ($keyboard) {
+            $keyboard_string = json_encode(array("keyboard"=>array($keyboard), "resize_keyboard" => true, "one_time_keyboard" => true));
+            $bot->getTelegram()->sendMessage($this->user_telegram_id, $message, null, false, null, $keyboard_string);
+        }
+        else {
+            $bot->getTelegram()->sendMessage($this->user_telegram_id, $message);
+        }
+        
     }
     
     public function isClient($bot) {
         return !$this->isManager($bot);
     }
     
-    public function isManager($bot) {
-        return ($this->is_manager && $bot->getManagerTelegramId() == $this->getUserTelegramId()) ? true : false;
+    public function isManager($bot = false) {
+        if ($bot) {
+            return ($this->is_manager && $bot->getManagerTelegramId() == $this->getUserTelegramId()) ? true : false;
+        } else {
+            return ($this->is_manager) ? true : false;
+        }
     }
     
     public function isAdmin() {
@@ -195,8 +275,8 @@ class User {
     }
 
     public function getCommandFullName() {
-        $command_full_name = $this->getFirstName()."_".$this->getLastName();
-        return str_replace(" ", "_", $command_full_name);
+        $command_full_name = $this->getFirstName()."-".$this->getLastName();
+        return str_replace(" ", "-", $command_full_name);
     }
 
     public function getFirstName() {
@@ -242,6 +322,21 @@ class User {
         $stmt = $this->DBH->prepare("UPDATE users SET is_manager = 1 WHERE id = :user_id");
         $stmt->bindParam(':user_id', $this->id);
         $stmt->execute();
+    }
+    
+    public function addNewBot($token) {
+        
+        global $config;
+        
+        $stmt = $this->DBH->prepare("INSERT INTO bots (manager_id, token) VALUES (:manager_id, :token)");
+        
+        $stmt->bindParam(':manager_id', $this->getUserTelegramId());
+        $stmt->bindParam(':token', $token);
+        $stmt->execute();
+        
+        $id = $this->DBH->lastInsertId();
+        
+        return file_get_contents("https://api.telegram.org/bot$token/setWebhook?url=".$config['gateway-url']."?id=$id");
     }
 
     protected function doesUserExist() {

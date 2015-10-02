@@ -55,7 +55,33 @@ if ($input = file_get_contents('php://input')) {
      * Manager:
      */
     if ($user->isManager($bot)) {
-        echo "Manager";
+        
+        if ($user->hasActiveScenario()) {
+            switch($user->getScenario()) {
+                case "wait-for-answer-message":
+                    $history = new History($bot);
+                    if ($client_history = $history->getHistoryByInProcess()) {
+                        $client = $client_history->getUser();
+                        $client->sendMessage($message->getText(), $bot);
+                        $user->setScenarioDone();
+                        $client_history->delete();
+                    }
+                    break;
+            }
+        }
+        else {
+            $history = new History($bot);
+            if ($client_history = $history->getHistoryByName(substr($message->getText(), 1))) {
+                $user->sendMessage("Напишите ответ:\n", $bot);
+                $client_history->makeStatusInProcess();
+                $user->setScenario("wait-for-answer-message");
+            } else {
+                $keyboard = $history->getArrayOfNames();
+                $user->sendMessage("Вы не указали получателя сообщения!\n", $bot, $keyboard);
+            }
+        }
+        
+        
     }
     
     /*
@@ -91,6 +117,21 @@ if ($input = file_get_contents('php://input')) {
                         }
                         
                         break;
+                    
+                    case "wait-bot-token":
+                        
+                        $answer = "Ошибка подключения нового бота! Попробуйте ещё раз!\n";
+                        
+                        $response = json_decode(file_get_contents("https://api.telegram.org/bot".$message->getText()."/setWebhook?url=".$config['gateway-url']));
+                        file_put_contents('input.txt', print_r($response, true), FILE_APPEND);
+                        if ($response->ok) {
+                            if ($user->addNewBot($message->getText())) {
+                                $answer = "Новый бот подключен!\n";
+                                $user->setScenarioDone();
+                            }
+                        }
+                        
+                        break;
                 }
                 
                 
@@ -108,6 +149,11 @@ if ($input = file_get_contents('php://input')) {
                     $answer = "Управление ботом Help Desk Center:\n\n";
                     $answer .= "/become_admin - получить права администратора.\n";
                     $answer .= "/become_manager - получить права менеджера.\n";
+                    
+                    if ($user->isManager()) {
+                        $answer .= "/add_bot - подключить нового бота.\n";
+                    }
+                    
                     $answer .= "/cancel - отменить текущую операцию.";
 
                 }
@@ -133,9 +179,16 @@ if ($input = file_get_contents('php://input')) {
                     $answer = "Спасибо! Запрос был послан администратору!\n";
                     $answer .= "О результатах его решения Вы узнаете мгновенно.\n";
                 }
+                
+                if ($message->getText() == "/add_bot") {
+                    if ($user->isManager()) {
+                        $answer = "Укажите токен нового бота:\n";
+                        $user->setScenario("wait-bot-token");
+                    }
+                }
             }
             
-            $bot->getTelegram()->sendMessage($user->getUserTelegramId(), $answer);
+            $user->sendMessage($answer, $bot);
         }
         else {
             /*
@@ -147,9 +200,11 @@ if ($input = file_get_contents('php://input')) {
             /*
              * Send message to manager:
              */
-            $message_to_manager = "/".$user->getCommandFullName()." : ".$message;
+            $keyboard = $history->getArrayOfNames();
+            
+            $message_to_manager = "/".$user->getCommandFullName()." : ".$message->getText();
             $manager = $bot->getManager();
-            $manager->sendMessage($message_to_manager, $bot);
+            $manager->sendMessage($message_to_manager, $bot, $keyboard);
         }
     }
     
