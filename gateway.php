@@ -21,8 +21,34 @@ if ($input = file_get_contents('php://input')) {
     /*
      * Administrator:
      */
-    if ($user->isAdmin() && $bot->getId() == 1) {
-        echo "Admin";
+    if ($user->isAdmin() && $bot->isMain()) {
+        if ($user->hasActiveScenario()) {
+            /*
+             * Comlete started scenario:
+             */
+            switch($user->getScenario()) {
+                case "manager-pending-decision":
+                    $admin = new Administrator();
+                    if ($message->getText() == "Одобрить") {
+                        $admin->makeManagerApprove();
+                        $admin->sendMessage("Спасибо! Запрос был одобрен!");
+                        $admin->setScenarioDone();
+                        if ($admin->hasManagerRequests()) {
+                            $admin->makeManagerRequestAsk();
+                        }
+                    } elseif ($message->getText() == "Отклонить") {
+                        $admin->makeManagerDecline();
+                        $admin->sendMessage("Запрос был отклонён!");
+                        $admin->setScenarioDone();
+                        if ($admin->hasManagerRequests()) {
+                            $admin->makeManagerRequestAsk();
+                        }
+                    } else {
+                        $admin->sendMessage("Вы ввели неверную команду!");
+                    }
+                    break;
+            }
+        }
     }
     
     /*
@@ -106,7 +132,6 @@ if ($input = file_get_contents('php://input')) {
                     
                     $answer = "Спасибо! Запрос был послан администратору!\n";
                     $answer .= "О результатах его решения Вы узнаете мгновенно.\n";
-                    $user->setScenario("wait-password-to-become-admin");
                 }
             }
             

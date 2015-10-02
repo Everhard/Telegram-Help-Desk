@@ -237,6 +237,12 @@ class User {
         $stmt->bindParam(':user_id', $this->id);
         $stmt->execute();
     }
+    
+    public function makeManager() {
+        $stmt = $this->DBH->prepare("UPDATE users SET is_manager = 1 WHERE id = :user_id");
+        $stmt->bindParam(':user_id', $this->id);
+        $stmt->execute();
+    }
 
     protected function doesUserExist() {
         $stmt = $this->DBH->prepare("SELECT * FROM users WHERE user_telegram_id = :user_telegram_id");
@@ -309,12 +315,18 @@ class Administrator extends User {
     
     public function storeManagerRequest($user) {
         
-        $request_time = time();
-        
-        $stmt = $this->DBH->prepare("INSERT INTO manager_requests (user_telegram_id, request_time, asked) VALUES (:user_telegram_id, :request_time, 0)");
+        $stmt = $this->DBH->prepare("SELECT COUNT(*) FROM manager_requests WHERE user_telegram_id = :user_telegram_id");
         $stmt->bindParam(':user_telegram_id', $user->getUserTelegramId());
-        $stmt->bindParam(':request_time', $request_time);
         $stmt->execute();
+        
+        if ($stmt->fetchColumn() == 0) {
+            $request_time = time();
+        
+            $stmt = $this->DBH->prepare("INSERT INTO manager_requests (user_telegram_id, request_time, asked) VALUES (:user_telegram_id, :request_time, 0)");
+            $stmt->bindParam(':user_telegram_id', $user->getUserTelegramId());
+            $stmt->bindParam(':request_time', $request_time);
+            $stmt->execute();
+        }
     }
     
     public function makeManagerRequestAsk() {
@@ -326,14 +338,53 @@ class Administrator extends User {
                 $stmt->bindParam(':id', $request['id']);
                 $stmt->execute();
                 
-                $this->sendMessage("Пользователь хочет стать менеджером (new code)!");
+                $user = new User($request['user_telegram_id']);
+                $this->sendMessage("Пользователь ".$user->getFullName()." хочет стать менеджером!", array("Одобрить", "Отклонить"));
+                $this->setScenario("manager-pending-decision");
             }
         }
     }
     
-    public function sendMessage($message) {
+    public function makeManagerApprove() {
+        $stmt = $this->DBH->query("SELECT * FROM manager_requests WHERE asked = 1");
+        if ($request = $stmt->fetch()) {
+            $user = new User($request['user_telegram_id']);
+            $user->makeManager();
+            
+            $bot = new Bot(1);
+            $user->sendMessage("Администратор одобрил Ваш запрос на получение прав менеджера!", $bot);
+            
+            $stmt = $this->DBH->prepare("DELETE FROM manager_requests WHERE id = :id");
+            $stmt->bindParam(':id', $request['id']);
+            $stmt->execute();
+        }
+    }
+    
+    public function makeManagerDecline() {
+        $stmt = $this->DBH->query("SELECT * FROM manager_requests WHERE asked = 1");
+        if ($request = $stmt->fetch()) {
+            $user = new User($request['user_telegram_id']);
+            
+            $bot = new Bot(1);
+            $user->sendMessage("Администратор отклонил Ваш запрос на получение прав менеджера!", $bot);
+            
+            $stmt = $this->DBH->prepare("DELETE FROM manager_requests WHERE id = :id");
+            $stmt->bindParam(':id', $request['id']);
+            $stmt->execute();
+        }
+    }
+    
+    public function sendMessage($message, $keyboard = false) {
         $bot = new Bot(1);
-        $bot->getTelegram()->sendMessage($this->user_telegram_id, $message);
+        
+        if ($keyboard) {
+            $keyboard_string = json_encode(array("keyboard"=>array($keyboard), "resize_keyboard" => true, "one_time_keyboard" => true));
+            $bot->getTelegram()->sendMessage($this->user_telegram_id, $message, null, false, null, $keyboard_string);
+        }
+        else {
+            $bot->getTelegram()->sendMessage($this->user_telegram_id, $message);
+        }
+        
     }
 }
 
