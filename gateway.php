@@ -4,8 +4,6 @@ require_once('config.php');
 require_once('libs/telegram.php');
 require_once('libs/helpdesk.php');
 
-$input = '{"update_id":914635613,"message":{"message_id":25,"from":{"id":109075721,"first_name":"Andrew","last_name":"Dorokhov"},"chat":{"id":109075721,"first_name":"Andrew","last_name":"Dorokhov"},"date":1443650284,"text":"1111"}}';
-
 if ($input = file_get_contents('php://input')) {
     
     $message = new Message($input);
@@ -29,14 +27,14 @@ if ($input = file_get_contents('php://input')) {
             switch($user->getScenario()) {
                 case "manager-pending-decision":
                     $admin = new Administrator();
-                    if ($message->getText() == "Одобрить") {
+                    if ($message->getSenderText() == "Одобрить") {
                         $admin->makeManagerApprove();
                         $admin->sendMessage("Спасибо! Запрос был одобрен!");
                         $admin->setScenarioDone();
                         if ($admin->hasManagerRequests()) {
                             $admin->makeManagerRequestAsk();
                         }
-                    } elseif ($message->getText() == "Отклонить") {
+                    } elseif ($message->getSenderText() == "Отклонить") {
                         $admin->makeManagerDecline();
                         $admin->sendMessage("Запрос был отклонён!");
                         $admin->setScenarioDone();
@@ -62,7 +60,7 @@ if ($input = file_get_contents('php://input')) {
                     $history = new History($bot);
                     if ($client_history = $history->getHistoryByInProcess()) {
                         $client = $client_history->getUser();
-                        $client->sendMessage($message->getText(), $bot);
+                        $client->sendMessage($message->getSenderText(), $bot);
                         $user->setScenarioDone();
                         $client_history->delete();
                     }
@@ -71,7 +69,7 @@ if ($input = file_get_contents('php://input')) {
         }
         else {
             $history = new History($bot);
-            if ($client_history = $history->getHistoryByName(substr($message->getText(), 1))) {
+            if ($client_history = $history->getHistoryByName(substr($message->getSenderText(), 1))) {
                 $user->sendMessage("Напишите ответ:\n", $bot);
                 $client_history->makeStatusInProcess();
                 $user->setScenario("wait-for-answer-message");
@@ -80,8 +78,6 @@ if ($input = file_get_contents('php://input')) {
                 $user->sendMessage("Вы не указали получателя сообщения!\n", $bot, $keyboard);
             }
         }
-        
-        
     }
     
     /*
@@ -96,7 +92,7 @@ if ($input = file_get_contents('php://input')) {
                  * Comlete started scenario:
                  */
                 
-                if ($message->getText() == "/cancel") {
+                if ($message->getSenderText() == "/cancel") {
                     $user->setScenarioDone();
                     $answer = "Текущее действие было отменено!\n";
                 }
@@ -104,7 +100,7 @@ if ($input = file_get_contents('php://input')) {
                 else switch($user->getScenario()) {
                     
                     case "wait-password-to-become-admin":
-                        if ($message->getText() == $config['admin-password']) {
+                        if ($message->getSenderText() == $config['admin-password']) {
                             
                             $answer = "Спасибо, ".$user->getFirstName()."! Теперь Вы новый администратор!\n";
                             $user->makeAdmin();
@@ -122,10 +118,10 @@ if ($input = file_get_contents('php://input')) {
                         
                         $answer = "Ошибка подключения нового бота! Попробуйте ещё раз!\n";
                         
-                        $response = json_decode(file_get_contents("https://api.telegram.org/bot".$message->getText()."/setWebhook?url=".$config['gateway-url']));
+                        $response = json_decode(file_get_contents("https://api.telegram.org/bot".$message->getSenderText()."/setWebhook?url=".$config['gateway-url']));
                         file_put_contents('input.txt', print_r($response, true), FILE_APPEND);
                         if ($response->ok) {
-                            if ($user->addNewBot($message->getText())) {
+                            if ($user->addNewBot($message->getSenderText())) {
                                 $answer = "Новый бот подключен!\n";
                                 $user->setScenarioDone();
                             }
@@ -144,7 +140,7 @@ if ($input = file_get_contents('php://input')) {
                 
                 $answer = 'Неверная команда! /start - просмотреть весь список команд.';
             
-                if ($message->getText() == "/start") {
+                if ($message->getSenderText() == "/start") {
 
                     $answer = "Управление ботом Help Desk Center:\n\n";
                     $answer .= "/become_admin - получить права администратора.\n";
@@ -158,19 +154,19 @@ if ($input = file_get_contents('php://input')) {
 
                 }
                 
-                if ($message->getText() == "/cancel") {
+                if ($message->getSenderText() == "/cancel") {
 
                     $answer = "В данный момент команда /cancel неприменима.\n";
 
                 }
 
-                if ($message->getText() == "/become_admin") {
+                if ($message->getSenderText() == "/become_admin") {
 
                     $answer = "Пожалуйста, введите пароль суперпользователя:\n";
                     $user->setScenario("wait-password-to-become-admin");
                 }
                 
-                if ($message->getText() == "/become_manager") {
+                if ($message->getSenderText() == "/become_manager") {
 
                     $admin = new Administrator();
                     $admin->storeManagerRequest($user);
@@ -180,7 +176,7 @@ if ($input = file_get_contents('php://input')) {
                     $answer .= "О результатах его решения Вы узнаете мгновенно.\n";
                 }
                 
-                if ($message->getText() == "/add_bot") {
+                if ($message->getSenderText() == "/add_bot") {
                     if ($user->isManager()) {
                         $answer = "Укажите токен нового бота:\n";
                         $user->setScenario("wait-bot-token");
@@ -202,21 +198,9 @@ if ($input = file_get_contents('php://input')) {
              */
             $keyboard = $history->getArrayOfNames();
             
-            $message_to_manager = "/".$user->getCommandFullName()." : ".$message->getText();
+            $message_to_manager = "/".$user->getCommandFullName()." : ".$message->getSenderText();
             $manager = $bot->getManager();
             $manager->sendMessage($message_to_manager, $bot, $keyboard);
         }
     }
-    
-    #file_put_contents('input.txt', "f", FILE_APPEND);
-    
 }
-
-
-
-
-//$telegram_bot = new TelegramBot();
-//
-//if ($telegram_bot->getWebhookUpdates()) {
-//    
-//}

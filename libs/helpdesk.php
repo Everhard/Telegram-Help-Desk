@@ -10,11 +10,12 @@ class Message {
      */
     public function __construct($input) {
         
-        $this->update = json_decode($input, true);
-        $this->sender_id = $this->update['message']['from']['id'];
-        $this->sender_first_name = $this->update['message']['from']['first_name'];
-        $this->sender_last_name = $this->update['message']['from']['last_name'];
-        $this->text = $this->update['message']['text'];
+        $this->update_object = json_decode($input, true);
+        
+        $this->sender_id            = $this->update_object['message']['from']['id'];
+        $this->sender_first_name    = $this->update_object['message']['from']['first_name'];
+        $this->sender_last_name     = $this->update_object['message']['from']['last_name'];
+        $this->sender_text          = $this->update_object['message']['text'];
         
     }
     
@@ -30,16 +31,16 @@ class Message {
         return $this->sender_last_name;
     }
     
-    public function getText() {
-        return $this->text;
+    public function getSenderText() {
+        return $this->sender_text;
     }
 
 
-    private $update;
+    private $update_object;
     private $sender_id;
     private $sender_first_name;
     private $sender_last_name;
-    private $text;
+    private $sender_text;
 }
 
 class History {
@@ -91,8 +92,9 @@ class History {
     }
     
     public function getHistoryByName($name) {
-        $stmt = $this->DBH->prepare("SELECT * FROM history WHERE client_name = :client_name");
+        $stmt = $this->DBH->prepare("SELECT * FROM history WHERE client_name = :client_name AND bot_id = :bot_id");
         $stmt->bindParam(':client_name', $name);
+        $stmt->bindParam(':bot_id', $this->bot->getId());
         $stmt->execute();
         
         if ($history = $stmt->fetch()) {
@@ -400,7 +402,6 @@ class Administrator extends User {
         else {
             throw new Exception("Admin doesn't exist!");
         }
-        
     }
     
     public function hasManagerRequests() {
@@ -483,6 +484,9 @@ class Administrator extends User {
     }
 }
 
+/**
+ * Database singleton class.
+ */
 class DB {
     public static function getInstance() {
         if (isset(self::$DBH)) {
