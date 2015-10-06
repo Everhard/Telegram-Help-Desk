@@ -1,5 +1,7 @@
 <?php
 
+define("MAIN_BOT", 1);
+
 class Message {
 
     /**
@@ -61,7 +63,7 @@ class History {
         /*
          * If it is help desk center bot then skip.
          */
-        if ($this->bot->getId() == 1) {
+        if ($this->bot->getId() == MAIN_BOT) {
             return;
         }
         
@@ -98,7 +100,7 @@ class History {
         $stmt->execute();
         
         if ($history = $stmt->fetch()) {
-            return new UserHistory($history);
+            return new HistoryRecord($history);
         }
         
         return false;
@@ -110,7 +112,7 @@ class History {
         $stmt->execute();
         
         if ($history = $stmt->fetch()) {
-            return new UserHistory($history);
+            return new HistoryRecord($history);
         }
         
         return false;
@@ -129,7 +131,7 @@ class History {
     private $history;
 }
 
-class UserHistory {
+class HistoryRecord {
     
     public function __construct($row) {
         $this->DBH = DB::getInstance();
@@ -170,7 +172,7 @@ class Bot {
         $this->DBH = DB::getInstance();
         
         if ($id == 0) {
-            $this->id = (isset($_GET['id'])) ? $_GET['id'] : 1;
+            $this->id = (isset($_GET['id'])) ? $_GET['id'] : MAIN_BOT;
         }
         else {
             $this->id = $id;
@@ -208,7 +210,7 @@ class Bot {
     }
     
     public function isMain() {
-        return ($this->id == 1) ? true : false;
+        return ($this->id == MAIN_BOT) ? true : false;
     }
     
     private $DBH;
@@ -218,25 +220,86 @@ class Bot {
     private $telegram;
 }
 
-class User {
-    public function __construct($user_data) {
+class Scenario {
+    
+    public function __construct($user_telegram_id, $bot_id) {
         $this->DBH = DB::getInstance();
         
-        if (is_array($user_data)) {
-            $this->first_name = $user_data['first-name'];
-            $this->last_name = $user_data['last-name'];
-            $this->user_telegram_id = $user_data['user-telegram-id'];
+        $this->user_telegram_id = $user_telegram_id;
+        $this->bot_id = $bot_id;
+        
+        $stmt = $this->DBH->prepare("SELECT * FROM scenarios WHERE user_telegram_id = :user_telegram_id AND bot_id = :bot_id");
+        $stmt->bindParam(':user_telegram_id', $this->user_telegram_id);
+        $stmt->bindParam(':bot_id', $this->bot_id);
+        $stmt->execute();
+        
+        if ($scenario_array = $stmt->fetch()) {
+            
+            $this->id = $scenario_array['id'];
+            $this->user_telegram_id = $scenario_array['user_telegram_id'];
+            $this->bot_id = $scenario_array['bot_id'];
+            $this->scenario = $scenario_array['scenario'];
+            $this->does_exist = true;
+            
         } else {
-            $this->user_telegram_id = $user_data;
+            
+            $this->does_exist = false;
+            
         }
         
-        if (!$this->doesUserExist()) {
-            if (is_array($user_data)) {
-                $this->storeNewUser();
+    }
+    
+    public function doesExist() {
+        return $this->does_exist;
+    }
+    
+    public function getScenario() {
+        return $this->scenario;
+    }
+    
+    public function setScenario($scenario_text) {
+        $this->deleteScenario();
+        $stmt = $this->DBH->prepare("INSERT INTO scenarios (user_telegram_id, bot_id, scenario) VALUES (:user_telegram_id, :bot_id, :scenario)");
+        $stmt->bindParam(':user_telegram_id', $this->user_telegram_id);
+        $stmt->bindParam(':bot_id', $this->bot_id);
+        $stmt->bindParam(':scenario', $scenario_text);
+        $stmt->execute();
+    }
+    
+    public function deleteScenario() {
+        $stmt = $this->DBH->prepare("DELETE FROM scenarios WHERE user_telegram_id = :user_telegram_id AND bot_id = :bot_id");
+        $stmt->bindParam(':user_telegram_id', $this->user_telegram_id);
+        $stmt->bindParam(':bot_id', $this->bot_id);
+        $stmt->execute();
+    }
+
+    private $DBH;
+    private $id;
+    private $user_telegram_id;
+    private $bot_id;
+    private $scenario;
+    private $does_exist;
+}
+
+class User {
+    public function __construct($user_telegram_id, $first_name = false, $last_name = false) {
+        
+        $this->DBH = DB::getInstance();
+        
+        $this->user_telegram_id = $user_telegram_id;
+        
+        if (!$first_name && !$last_name) {
+            if ($this->doesExist()) {
+                return;
             }
-            else {
-                throw new Exception("Unknow user telegram ID!");
-            }
+        }
+        
+        $this->first_name = $first_name;
+        $this->last_name = $last_name;
+        
+        
+        if (!$this->doesExist()) {
+            $this->storeNewUser();
         }
     }
     
@@ -289,28 +352,24 @@ class User {
         return $this->last_name;
     }
     
-    public function hasActiveScenario() {
-        return ($this->scenario != "no") ? true : false;
+    public function hasActiveScenario($bot) {
+        $scenario = new Scenario($this->user_telegram_id, $bot->getId());
+        return $scenario->doesExist();
     }
     
-    public function getScenario() {
-        return $this->scenario;
+    public function getScenario($bot) {
+        $scenario = new Scenario($this->user_telegram_id, $bot->getId());
+        return $scenario->getScenario();
     }
     
-    public function setScenario($scenario) {
-        $this->scenario = $scenario;
-        
-        /*
-         * Save to DB:
-         */
-        $stmt = $this->DBH->prepare("UPDATE users SET scenario = :scenario WHERE id = :user_id");
-        $stmt->bindParam(':scenario', $this->scenario);
-        $stmt->bindParam(':user_id', $this->id);
-        $stmt->execute();
+    public function setScenario($scenario_text, $bot) {
+        $scenario = new Scenario($this->user_telegram_id, $bot->getId());
+        $scenario->setScenario($scenario_text);
     }
     
-    public function setScenarioDone() {
-        $this->setScenario("no");
+    public function setScenarioDone($bot) {
+        $scenario = new Scenario($this->user_telegram_id, $bot->getId());
+        $scenario->deleteScenario();
     }
     
     public function makeAdmin() {
@@ -341,7 +400,7 @@ class User {
         return file_get_contents("https://api.telegram.org/bot$token/setWebhook?url=".$config['gateway-url']."?id=$id");
     }
 
-    protected function doesUserExist() {
+    protected function doesExist() {
         $stmt = $this->DBH->prepare("SELECT * FROM users WHERE user_telegram_id = :user_telegram_id");
         $stmt->bindParam(':user_telegram_id', $this->user_telegram_id);
         $stmt->execute();
@@ -353,7 +412,6 @@ class User {
             $this->user_telegram_id = $user_array['user_telegram_id'];
             $this->is_manager = $user_array['is_manager'];
             $this->is_admin = $user_array['is_admin'];
-            $this->scenario = $user_array['scenario'];
             return true;
         }
         
@@ -364,16 +422,15 @@ class User {
         
         $this->is_manager = 0;
         $this->is_admin = 0;
-        $this->scenario = 'no';
+        $this->scenario = false;
         
-        $stmt = $this->DBH->prepare("INSERT INTO users (first_name, last_name, user_telegram_id, is_manager, is_admin, scenario) VALUES (:first_name, :last_name, :user_telegram_id, :is_manager, :is_admin, :scenario)");
+        $stmt = $this->DBH->prepare("INSERT INTO users (first_name, last_name, user_telegram_id, is_manager, is_admin) VALUES (:first_name, :last_name, :user_telegram_id, :is_manager, :is_admin)");
         
         $stmt->bindParam(':first_name', $this->first_name);
         $stmt->bindParam(':last_name', $this->last_name);
         $stmt->bindParam(':user_telegram_id', $this->user_telegram_id);
         $stmt->bindParam(':is_manager', $this->is_manager);
         $stmt->bindParam(':is_admin', $this->is_admin);
-        $stmt->bindParam(':scenario', $this->scenario);
         
         $stmt->execute();
 
@@ -387,7 +444,6 @@ class User {
     protected $user_telegram_id;
     protected $is_manager;
     protected $is_admin;
-    protected $scenario;
 }
 
 class Administrator extends User {
@@ -436,7 +492,7 @@ class Administrator extends User {
                 
                 $user = new User($request['user_telegram_id']);
                 $this->sendMessage("Пользователь ".$user->getFullName()." хочет стать менеджером!", array("Одобрить", "Отклонить"));
-                $this->setScenario("manager-pending-decision");
+                $this->setScenario("manager-pending-decision", new Bot(MAIN_BOT));
             }
         }
     }
@@ -447,7 +503,7 @@ class Administrator extends User {
             $user = new User($request['user_telegram_id']);
             $user->makeManager();
             
-            $bot = new Bot(1);
+            $bot = new Bot(MAIN_BOT);
             $user->sendMessage("Администратор одобрил Ваш запрос на получение прав менеджера!", $bot);
             
             $stmt = $this->DBH->prepare("DELETE FROM manager_requests WHERE id = :id");
@@ -461,7 +517,7 @@ class Administrator extends User {
         if ($request = $stmt->fetch()) {
             $user = new User($request['user_telegram_id']);
             
-            $bot = new Bot(1);
+            $bot = new Bot(MAIN_BOT);
             $user->sendMessage("Администратор отклонил Ваш запрос на получение прав менеджера!", $bot);
             
             $stmt = $this->DBH->prepare("DELETE FROM manager_requests WHERE id = :id");
@@ -471,7 +527,7 @@ class Administrator extends User {
     }
     
     public function sendMessage($message, $keyboard = false) {
-        $bot = new Bot(1);
+        $bot = new Bot(MAIN_BOT);
         
         if ($keyboard) {
             $keyboard_string = json_encode(array("keyboard"=>array($keyboard), "resize_keyboard" => true, "one_time_keyboard" => true));

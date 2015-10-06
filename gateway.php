@@ -6,38 +6,48 @@ require_once('libs/helpdesk.php');
 
 if ($input = file_get_contents('php://input')) {
     
+    /*
+     * Message from user (it can be client, manager, admin).
+     */
     $message = new Message($input);
     
+    /*
+     * Current bot (it can be main admin bot or manager's bot):
+     */
     $bot = new Bot();
     
-    $user = new User(array(
-        "first-name" => $message->getSenderFirstName(),
-        "last-name" => $message->getSenderLastName(),
-        "user-telegram-id" => $message->getSenderId(),
-    ));
+    /*
+     * User that have sent message.
+     */
+    $user = new User(
+            $message->getSenderId(),
+            $message->getSenderFirstName(), 
+            $message->getSenderLastName()
+    );
+
     
     /*
      * Administrator:
      */
     if ($user->isAdmin() && $bot->isMain()) {
-        if ($user->hasActiveScenario()) {
+        if ($user->hasActiveScenario($bot)) {
             /*
              * Comlete started scenario:
              */
-            switch($user->getScenario()) {
+            switch($user->getScenario($bot)) {
                 case "manager-pending-decision":
                     $admin = new Administrator();
                     if ($message->getSenderText() == "Одобрить") {
                         $admin->makeManagerApprove();
                         $admin->sendMessage("Спасибо! Запрос был одобрен!");
-                        $admin->setScenarioDone();
+                        $admin->setScenarioDone($bot);
                         if ($admin->hasManagerRequests()) {
                             $admin->makeManagerRequestAsk();
                         }
                     } elseif ($message->getSenderText() == "Отклонить") {
                         $admin->makeManagerDecline();
                         $admin->sendMessage("Запрос был отклонён!");
-                        $admin->setScenarioDone();
+                        $admin->setScenarioDone($bot);
                         if ($admin->hasManagerRequests()) {
                             $admin->makeManagerRequestAsk();
                         }
@@ -46,7 +56,18 @@ if ($input = file_get_contents('php://input')) {
                     }
                     break;
             }
+        } else {
+            $answer = 'Неверная команда! /start - просмотреть весь список команд.';
+            
+            if ($message->getSenderText() == "/start") {
+
+                $answer = "Управление ботом Help Desk Center:\n\n";
+                $answer .= "Команды отсутствуют.\n";
+            }
+            
+            $user->sendMessage($answer, $bot);
         }
+        exit;
     }
     
     /*
@@ -54,15 +75,15 @@ if ($input = file_get_contents('php://input')) {
      */
     if ($user->isManager($bot)) {
         
-        if ($user->hasActiveScenario()) {
-            switch($user->getScenario()) {
+        if ($user->hasActiveScenario($bot)) {
+            switch($user->getScenario($bot)) {
                 case "wait-for-answer-message":
                     $history = new History($bot);
                     if ($client_history = $history->getHistoryByInProcess()) {
                         $client = $client_history->getUser();
                         $client->sendMessage($message->getSenderText(), $bot);
-                        $user->setScenarioDone();
                         $client_history->delete();
+                        $user->setScenarioDone($bot);
                     }
                     break;
             }
@@ -72,7 +93,7 @@ if ($input = file_get_contents('php://input')) {
             if ($client_history = $history->getHistoryByName(substr($message->getSenderText(), 1))) {
                 $user->sendMessage("Напишите ответ:\n", $bot);
                 $client_history->makeStatusInProcess();
-                $user->setScenario("wait-for-answer-message");
+                $user->setScenario("wait-for-answer-message", $bot);
             } else {
                 $keyboard = $history->getArrayOfNames();
                 $user->sendMessage("Вы не указали получателя сообщения!\n", $bot, $keyboard);
@@ -87,24 +108,24 @@ if ($input = file_get_contents('php://input')) {
         
         if ($bot->isMain()) {
             
-            if ($user->hasActiveScenario()) {
+            if ($user->hasActiveScenario($bot)) {
                 /*
                  * Comlete started scenario:
                  */
                 
                 if ($message->getSenderText() == "/cancel") {
-                    $user->setScenarioDone();
+                    $user->setScenarioDone($bot);
                     $answer = "Текущее действие было отменено!\n";
                 }
                 
-                else switch($user->getScenario()) {
+                else switch($user->getScenario($bot)) {
                     
                     case "wait-password-to-become-admin":
                         if ($message->getSenderText() == $config['admin-password']) {
                             
                             $answer = "Спасибо, ".$user->getFirstName()."! Теперь Вы новый администратор!\n";
                             $user->makeAdmin();
-                            $user->setScenarioDone();
+                            $user->setScenarioDone($bot);
                         }
                         else {
                             
@@ -123,7 +144,7 @@ if ($input = file_get_contents('php://input')) {
                         if ($response->ok) {
                             if ($user->addNewBot($message->getSenderText())) {
                                 $answer = "Новый бот подключен!\n";
-                                $user->setScenarioDone();
+                                $user->setScenarioDone($bot);
                             }
                         }
                         
@@ -163,7 +184,7 @@ if ($input = file_get_contents('php://input')) {
                 if ($message->getSenderText() == "/become_admin") {
 
                     $answer = "Пожалуйста, введите пароль суперпользователя:\n";
-                    $user->setScenario("wait-password-to-become-admin");
+                    $user->setScenario("wait-password-to-become-admin", $bot);
                 }
                 
                 if ($message->getSenderText() == "/become_manager") {
@@ -179,7 +200,7 @@ if ($input = file_get_contents('php://input')) {
                 if ($message->getSenderText() == "/add_bot") {
                     if ($user->isManager()) {
                         $answer = "Укажите токен нового бота:\n";
-                        $user->setScenario("wait-bot-token");
+                        $user->setScenario("wait-bot-token", $bot);
                     }
                 }
             }
