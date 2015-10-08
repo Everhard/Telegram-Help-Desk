@@ -25,6 +25,9 @@ else {
         $user->setScenario("wait-for-answer-message", $bot);
     } else {
         $keyboard = $history->getArrayOfNames();
-        $user->sendMessage("Вы не указали получателя сообщения!\n", $bot, $keyboard);
+        
+        if ($keyboard) {
+            $user->sendMessage("Вы не указали получателя сообщения!\n", $bot, $keyboard);
+        }
     }
 }

@@ -38,6 +38,36 @@ if ($user->hasActiveScenario($bot)) {
             }
 
             break;
+            
+        case "waiting-number-to-delete-bot":
+            
+            $DBH = DB::getInstance();
+            $stmt = $DBH->prepare("SELECT * FROM bots WHERE manager_id = :user_telegram_id");
+            $stmt->bindParam(':user_telegram_id', $user->getUserTelegramId());
+            $stmt->execute();
+
+            $bots = $stmt->fetchAll();
+
+            if (count($bots) > 0) {
+                $counter = 1;
+
+                foreach ($bots as $bot_row) {
+                    
+                    if ($message->getSenderText() == $counter) {
+                        $DBH->exec("DELETE FROM bots WHERE id = ".$bot_row['id']);
+                        
+                        break;
+                    }
+                    
+                    $counter++;
+                }
+            }
+            
+            
+            $user->setScenarioDone($bot);
+            $answer = "Бот был удалён!\n";
+            
+            break;
     }
 
     $user->sendMessage($answer, $bot);
@@ -53,6 +83,8 @@ else {
         $answer .= "/become_admin - получить права администратора.\n";
         $answer .= "/who_is_admin - узнать, кто администратор.\n";
         $answer .= "/add_bot - подключить нового бота.\n";
+        $answer .= "/show_bots - просмотреть список ботов.\n";
+        $answer .= "/delete_bot - удалить бота.\n";
         $answer .= "/cancel - отменить текущую операцию.";
 
     }
@@ -76,9 +108,64 @@ else {
     }
 
     if ($message->getSenderText() == "/add_bot") {
-        if ($user->isManager()) {
             $answer = "Укажите токен нового бота:\n";
             $user->setScenario("wait-bot-token", $bot);
+    }
+    
+    if ($message->getSenderText() == "/show_bots") {
+        
+       $DBH = DB::getInstance();
+       $stmt = $DBH->prepare("SELECT * FROM bots WHERE manager_id = :user_telegram_id");
+       $stmt->bindParam(':user_telegram_id', $user->getUserTelegramId());
+       $stmt->execute();
+       
+       $bots = $stmt->fetchAll();
+       
+       if (count($bots) > 0) {
+           
+           $answer = "Список подключённых ботов:\n";
+           $counter = 1;
+           
+           foreach ($bots as $bot_row) {
+               list($bot_owner_id, $bot_hash) = explode(":", $bot_row['token']);
+               $answer .= "$counter. Бот ".$bot_hash."\n";
+               $counter++;
+           }
+       }
+       
+       else {
+            $answer = "У Вас нет ни одного подключенного бота.";
+       }
+       
+    }
+    
+    if ($message->getSenderText() == "/delete_bot") {
+        
+        $DBH = DB::getInstance();
+        $stmt = $DBH->prepare("SELECT * FROM bots WHERE manager_id = :user_telegram_id");
+        $stmt->bindParam(':user_telegram_id', $user->getUserTelegramId());
+        $stmt->execute();
+        
+        $bots = $stmt->fetchAll();
+       
+        if (count($bots) > 0) {
+
+            $answer = "Укажите номер бота, который нужно удалить:\n";
+            
+            $buttons = array();
+            
+            for ($i = 1; $i <= count($bots); $i++) {
+                $buttons[] = "$i";
+            }
+
+            $user->sendMessage($answer, $bot, $buttons);
+            $user->setScenario("waiting-number-to-delete-bot", $bot);
+            
+            exit();
+        }
+
+        else {
+             $answer = "У Вас нет ни одного подключенного бота.";
         }
     }
     
