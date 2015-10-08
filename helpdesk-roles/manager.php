@@ -9,6 +9,10 @@ if ($user->hasActiveScenario($bot)) {
                 $client->sendMessage($message->getSenderText(), $bot);
                 $client_history->delete();
                 $user->setScenarioDone($bot);
+                
+                if ($names = $history->getArrayOfNames()) {
+                    $user->sendMessage("Выберите следующего клиента для ответа:\n", $bot, $names);
+                }
             }
             break;
     }

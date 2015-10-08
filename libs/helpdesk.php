@@ -119,6 +119,13 @@ class History {
     }
 
     public function getArrayOfNames() {
+        
+        $stmt = $this->DBH->prepare("SELECT * FROM history WHERE bot_id = :bot_id");
+        $stmt->bindParam(':bot_id', $this->bot->getId());
+        $stmt->execute();
+        
+        $this->history = $stmt->fetchAll();
+        
         $names = array();
         foreach ($this->history as $history) {
             $names[] = "/".$history['client_name'];
