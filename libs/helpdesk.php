@@ -373,6 +373,9 @@ class User {
     }
     
     public function makeAdmin() {
+        $admin = new Administrator();
+        $admin->resetManagerRequests();
+        
         $this->DBH->exec("UPDATE users SET is_admin = 0");
         $stmt = $this->DBH->prepare("UPDATE users SET is_admin = 1 WHERE id = :user_id");
         $stmt->bindParam(':user_id', $this->id);
@@ -481,6 +484,13 @@ class Administrator extends User {
         }
     }
     
+    public function resetManagerRequests() {
+        $this->DBH->query("DELETE FROM manager_requests");
+        $this->DBH->query("DELETE FROM scenarios WHERE scenario='manager-pending-decision'");
+        
+    }
+
+
     public function makeManagerRequestAsk() {
         $stmt = $this->DBH->query("SELECT COUNT(*) FROM manager_requests WHERE asked = 1");
         if ($stmt->fetchColumn() == 0) {
