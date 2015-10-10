@@ -32,7 +32,7 @@ if ($user->hasActiveScenario($bot)) {
             file_put_contents('input.txt', print_r($response, true), FILE_APPEND);
             if ($response->ok) {
                 if ($user->addNewBot($message->getSenderText())) {
-                    $answer = "Новый бот подключен!\n";
+                    $answer = "Новый бот подключен!\nНе забудьте написать ему произвольное сообщение перед использованием!";
                     $user->setScenarioDone($bot);
                 }
             }
