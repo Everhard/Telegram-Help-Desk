@@ -113,6 +113,7 @@ else {
         $answer .= "/mass_message - массовая рассылка.\n";
         $answer .= "/group_message - групповая рассылка.\n";
         $answer .= "/dismiss_manager - уволить менеджера.\n";
+        $answer .= "/cancel - отменить текущую операцию.";
     }
     
     if ($message->getSenderText() == "/who_is_admin") {

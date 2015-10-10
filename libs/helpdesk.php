@@ -1,6 +1,7 @@
 <?php
 
 define("MAIN_BOT", 1);
+define("ANISPAM_BLOCK_LIMIT", 5); // Maximum messages per minute from one client.
 
 class Message {
 
@@ -343,6 +344,10 @@ class User {
         return ($this->is_admin) ? true : false;
     }
     
+    public function isBaned() {
+        return ($this->is_baned) ? true : false;
+    }
+    
     public function getUserTelegramId() {
         return $this->user_telegram_id;
     }
@@ -400,6 +405,13 @@ class User {
         $stmt->execute();
     }
     
+    public function addToBan() {
+        $stmt = $this->DBH->prepare("UPDATE users SET is_baned = 1 WHERE id = :user_id");
+        $stmt->bindParam(':user_id', $this->id);
+        $stmt->execute();
+    }
+
+
     public function addNewBot($token) {
         
         global $config;
@@ -443,6 +455,7 @@ class User {
             $this->user_telegram_id = $user_array['user_telegram_id'];
             $this->is_manager = $user_array['is_manager'];
             $this->is_admin = $user_array['is_admin'];
+            $this->is_baned = $user_array['is_baned'];
             return true;
         }
         
@@ -453,15 +466,17 @@ class User {
         
         $this->is_manager = 0;
         $this->is_admin = 0;
+        $this->is_baned = 0;
         $this->scenario = false;
         
-        $stmt = $this->DBH->prepare("INSERT INTO users (first_name, last_name, user_telegram_id, is_manager, is_admin) VALUES (:first_name, :last_name, :user_telegram_id, :is_manager, :is_admin)");
+        $stmt = $this->DBH->prepare("INSERT INTO users (first_name, last_name, user_telegram_id, is_manager, is_admin, is_baned) VALUES (:first_name, :last_name, :user_telegram_id, :is_manager, :is_admin, :is_baned)");
         
         $stmt->bindParam(':first_name', $this->first_name);
         $stmt->bindParam(':last_name', $this->last_name);
         $stmt->bindParam(':user_telegram_id', $this->user_telegram_id);
         $stmt->bindParam(':is_manager', $this->is_manager);
         $stmt->bindParam(':is_admin', $this->is_admin);
+        $stmt->bindParam(':is_baned', $this->is_baned);
         
         $stmt->execute();
 
@@ -475,6 +490,7 @@ class User {
     protected $user_telegram_id;
     protected $is_manager;
     protected $is_admin;
+    protected $is_baned;
 }
 
 class Administrator extends User {
@@ -686,6 +702,56 @@ class Settings {
         }
         
         else return false;
+    }
+}
+
+class AntiSpam {
+    public static function hasPermition($user) {
+        
+        if (!$user->isBaned()) {
+            
+            self::storeRequest($user);
+            
+            $minute_ago = time() - 60;
+            $day_ago = time() - 60 * 60 * 24;
+            
+            $DBH = DB::getInstance();
+            
+            // Clear old history:
+            $DBH->query("DELETE FROM antispam WHERE timestamp < $day_ago");
+            
+            $stmt = $DBH->prepare("SELECT COUNT(*) FROM antispam WHERE user_telegram_id = :user_telegram_id AND timestamp > :timeborder");
+            $stmt->bindParam(':user_telegram_id', $user->getUserTelegramId());
+            $stmt->bindParam(':timeborder', $minute_ago);
+            $stmt->execute();
+            
+            $messages_per_minute = $stmt->fetchColumn();
+            if ($messages_per_minute > ANISPAM_BLOCK_LIMIT) {
+                
+                $user->addToBan();
+                // Notify user about ban:
+                
+                $bot = new Bot();
+                $user->sendMessage("Вы были забанены за превышение лимита сообщений в минуту!", $bot);
+                
+                return false;
+            }
+            
+            return true;
+        }
+        
+        return false;
+    }
+    
+    private static function storeRequest($user) {
+        $DBH = DB::getInstance();
+        
+        $current_time = time();
+        
+        $stmt = $DBH->prepare("INSERT INTO antispam (user_telegram_id, timestamp) VALUES (:user_telegram_id, :timestamp)");
+        $stmt->bindParam(':user_telegram_id', $user->getUserTelegramId());
+        $stmt->bindParam(':timestamp', $current_time);
+        $stmt->execute();
     }
 }
 
