@@ -730,7 +730,6 @@ class AntiSpam {
                 
                 $user->addToBan();
                 // Notify user about ban:
-                
                 $bot = new Bot();
                 $user->sendMessage("Вы были забанены за превышение лимита сообщений в минуту!", $bot);
                 

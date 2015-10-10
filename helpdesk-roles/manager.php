@@ -6,7 +6,15 @@ if ($user->hasActiveScenario($bot)) {
             $history = new History($bot);
             if ($client_history = $history->getHistoryByInProcess()) {
                 $client = $client_history->getUser();
-                $client->sendMessage($message->getSenderText(), $bot);
+                
+                if ($message->getSenderText() == "/ban") {
+                    $client->addToBan();
+                    $client->sendMessage("Вы были забанены менеджером!", $bot);
+                    $user->sendMessage("Пользователь ".$client->getFullName()." был забанен!", $bot);
+                } else {
+                     $client->sendMessage($message->getSenderText(), $bot);
+                }
+                
                 $client_history->delete();
                 $user->setScenarioDone($bot);
                 
