@@ -216,6 +216,11 @@ class Bot {
         return $this->telegram;
     }
     
+    public function getToken() {
+        return $this->token;
+    }
+
+
     public function isMain() {
         return ($this->id == MAIN_BOT) ? true : false;
     }
@@ -322,7 +327,7 @@ class User {
         
     }
     
-    public function isClient($bot) {
+    public function isClient($bot = false) {
         return !$this->isManager($bot);
     }
     
@@ -408,6 +413,22 @@ class User {
         $id = $this->DBH->lastInsertId();
         
         return file_get_contents("https://api.telegram.org/bot$token/setWebhook?url=".$config['gateway-url']."?id=$id");
+    }
+    
+    public function registerBotAssoc($bot) {
+        $stmt = $this->DBH->prepare("SELECT * FROM bots_users_assoc WHERE user_telegram_id = :user_telegram_id AND bot_token = :bot_token");
+        $stmt->bindParam(':user_telegram_id', $this->user_telegram_id);
+        $stmt->bindParam(':bot_token', $bot->getToken());
+        $stmt->execute();
+        
+        if ($assoc = $stmt->fetch()) {
+            return;
+        }
+        
+        $stmt = $this->DBH->prepare("INSERT INTO bots_users_assoc (bot_token, user_telegram_id) VALUES (:bot_token, :user_telegram_id)");  
+        $stmt->bindParam(':bot_token', $bot->getToken());
+        $stmt->bindParam(':user_telegram_id', $this->user_telegram_id);
+        $stmt->execute();
     }
 
     protected function doesExist() {
@@ -554,6 +575,117 @@ class Administrator extends User {
             $bot->getTelegram()->sendMessage($this->user_telegram_id, $message);
         }
         
+    }
+}
+
+class MassMessage {
+    public function __construct($send_type = false) {
+        
+        $this->DBH = DB::getInstance();
+        
+        $this->send_type = "mass";
+        
+        if ($send_type && in_array($send_type, array("mass", "group"))) {
+            $this->send_type = $send_type;
+        }
+    }
+    
+    public function send($message) {
+        
+        switch ($this->send_type) {
+            case "group":
+                
+                $manager_number = Settings::get("group_message_mananger");
+                $manager_id = 0;
+                
+                $stmt = $this->DBH->query("SELECT * FROM users WHERE is_manager = 1");
+                $users = $stmt->fetchAll();
+
+                if (count($users) > 0) {
+
+                    $counter = 1;
+
+                    foreach($users as $user_row) {
+                        if ($counter == $manager_number) {
+                            $manager_id = $user_row['user_telegram_id'];
+                            break;
+                        }
+                        $counter++;
+                    }
+                }
+                
+                $stmt = $this->DBH->query("SELECT * FROM bots WHERE manager_id = :mananger_id");
+                $stmt->bindParam(':mananger_id', $manager_id);
+                $stmt->execute();
+                
+                $bots = $stmt->fetchAll();
+                
+                foreach ($bots as $bot_row) {
+                    $stmt = $this->DBH->query("SELECT * FROM bots_users_assoc WHERE bot_token = :bot_token");
+                    $stmt->bindParam(':bot_token', $bot_row['token']);
+                    $stmt->execute();
+                    
+                    $bots_user_assoc = $stmt->fetchAll();
+                    
+                    foreach ($bots_user_assoc as $assoc_row) {
+                        $bot = new Bot($bot_row['id']);
+                        $user = new User($assoc_row['user_telegram_id']);
+                        $user->sendMessage($message, $bot);
+                    }
+                }
+                
+                return (isset($user)) ? true : false;
+                
+                break;
+            
+            case "mass":
+                
+                $stmt = $this->DBH->query("SELECT * FROM bots_users_assoc");
+
+                while ($assoc = $stmt->fetch()) {
+
+                    $bot_stmt = $this->DBH->prepare("SELECT * FROM bots WHERE token = :token");
+                    $bot_stmt->bindParam(':token', $assoc['bot_token']);
+                    $bot_stmt->execute();
+
+                    if ($bot_row = $bot_stmt->fetch()) {
+                        $bot = new Bot($bot_row['id']);
+                        $user = new User($assoc['user_telegram_id']);
+                        $user->sendMessage($message, $bot);
+                    }
+                }
+
+                return (isset($user)) ? true : false;
+                
+                break;
+        }
+        
+
+    }
+
+    private $DBH;
+    private $send_type;
+}
+
+class Settings {
+    public static function save($option, $value) {
+        $DBH = DB::getInstance();
+        $stmt = $DBH->prepare("UPDATE settings SET option_value = :value WHERE option_name = :name");
+        $stmt->bindParam(':name', $option);
+        $stmt->bindParam(':value', $value);
+        $stmt->execute();
+    }
+    
+    public static function get($option) {
+        $stmt = DB::getInstance()->prepare("SELECT option_value FROM settings WHERE option_name = :name");
+        $stmt->bindParam(':name', $option);
+        $stmt->execute();
+        
+        if ($value = $stmt->fetchColumn()) {
+            return $value;
+        }
+        
+        else return false;
     }
 }
 

@@ -47,6 +47,7 @@ if ($input = file_get_contents('php://input')) {
             }
 
             if ($user->isClient($bot)) {
+                $user->registerBotAssoc($bot);
                 require_once('helpdesk-roles/client.php');
             }
         }
