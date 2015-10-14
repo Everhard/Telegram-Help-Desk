@@ -357,8 +357,8 @@ class User {
     }
 
     public function getCommandFullName() {
-        $command_full_name = $this->getFirstName()."-".$this->getLastName();
-        return str_replace(" ", "-", $command_full_name);
+        $command_full_name = $this->getFirstName()."_".$this->getLastName();
+        return str_replace(" ", "_", $command_full_name);
     }
 
     public function getFirstName() {
