@@ -67,7 +67,7 @@ if ($user->hasActiveScenario($bot)) {
         case "waiting-message-to-mass-send":
             
             $mass_message = new MassMessage();
-            if ($mass_message->send("Новость: ".$message->getSenderText())) {
+            if ($mass_message->send($message->getSenderText())) {
                 $answer = "Сообщение было разослано всем клиентам!";
             } else {
                 $answer = "Не зарегистрировано ни одного клиента!";
@@ -80,7 +80,7 @@ if ($user->hasActiveScenario($bot)) {
         case "waiting-message-to-group-send":
             
             $mass_message = new MassMessage("group");
-            if ($mass_message->send("Новость: ".$message->getSenderText())) {
+            if ($mass_message->send($message->getSenderText())) {
                 $answer = "Сообщение было разослано всей группе!";
             } else {
                 $answer = "У этого менеджера нет клиентов!";
