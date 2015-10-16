@@ -39,6 +39,24 @@ if ($user->hasActiveScenario($bot)) {
 
             break;
             
+        case "wait-mass-bot-tokens":
+
+            $answer = "Возникла ошибка! Обратитесь к администратору!\n";
+            $tokens = explode("\n", $message->getSenderText());
+            
+            foreach ($tokens as $token) {
+                $response = json_decode(file_get_contents("https://api.telegram.org/bot".$token."/setWebhook?url=".$config['gateway-url']));
+                if (isset($response->ok) && $response->ok) {
+                    if ($user->addNewBot($token)) {
+                        $answer = "Список ботов был обработан и добавлен в базу!\n";
+                    }
+                }
+            }
+            
+            $user->setScenarioDone($bot);
+
+            break;
+            
         case "waiting-number-to-delete-bot":
             
             $DBH = DB::getInstance();
@@ -83,6 +101,7 @@ else {
         $answer .= "/become_admin - получить права администратора.\n";
         $answer .= "/who_is_admin - узнать, кто администратор.\n";
         $answer .= "/add_bot - подключить нового бота.\n";
+        $answer .= "/mass_add_bot - массовое добавление ботов.\n";
         $answer .= "/show_bots - просмотреть список ботов.\n";
         $answer .= "/delete_bot - удалить бота.\n";
         $answer .= "/cancel - отменить текущую операцию.";
@@ -110,6 +129,11 @@ else {
     if ($message->getSenderText() == "/add_bot") {
             $answer = "Укажите токен нового бота:\n";
             $user->setScenario("wait-bot-token", $bot);
+    }
+    
+    if ($message->getSenderText() == "/mass_add_bot") {
+            $answer = "Укажите список токенов (каждый с новой строки):\n";
+            $user->setScenario("wait-mass-bot-tokens", $bot);
     }
     
     if ($message->getSenderText() == "/show_bots") {

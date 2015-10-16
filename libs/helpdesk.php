@@ -416,15 +416,26 @@ class User {
         
         global $config;
         
-        $stmt = $this->DBH->prepare("INSERT INTO bots (manager_id, token) VALUES (:manager_id, :token)");
-        
-        $stmt->bindParam(':manager_id', $this->getUserTelegramId());
+        /*
+         * Check if bot already exists:
+         */
+        $stmt = $this->DBH->prepare("SELECT * FROM bots WHERE token = :token");
         $stmt->bindParam(':token', $token);
         $stmt->execute();
         
-        $id = $this->DBH->lastInsertId();
+        if ($stmt->fetchColumn() == 0) {
+            $stmt = $this->DBH->prepare("INSERT INTO bots (manager_id, token) VALUES (:manager_id, :token)");
         
-        return file_get_contents("https://api.telegram.org/bot$token/setWebhook?url=".$config['gateway-url']."?id=$id");
+            $stmt->bindParam(':manager_id', $this->getUserTelegramId());
+            $stmt->bindParam(':token', $token);
+            $stmt->execute();
+
+            $id = $this->DBH->lastInsertId();
+
+            return file_get_contents("https://api.telegram.org/bot$token/setWebhook?url=".$config['gateway-url']."?id=$id");
+        }
+        
+        return false;
     }
     
     public function registerBotAssoc($bot) {
